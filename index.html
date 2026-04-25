@@ -73,14 +73,18 @@
   }
   select:focus, input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
 
-  button {
+  button, a.btn {
     padding: 6px 12px; font-size: 13px; cursor: pointer;
     border: 1px solid var(--border); background: #fff; color: var(--text);
-    border-radius: var(--radius);
+    border-radius: var(--radius); display: inline-flex; align-items: center;
+    gap: 4px; text-decoration: none;
   }
-  button:hover:not(:disabled) { background: #f1f5f9; }
+  button:hover:not(:disabled), a.btn:hover { background: #f1f5f9; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.danger { color: var(--danger); border-color: transparent; }
+  button.danger { color: var(--danger); border-color: transparent; background: transparent; }
+  a.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  a.btn.primary:hover { background: #1d4ed8; }
+  .btn-row { display: inline-flex; gap: 6px; justify-content: flex-end; }
 
   .search-box { position: relative; }
   .search-box input { padding-left: 36px; }
@@ -123,7 +127,7 @@
   <!-- Step 1: Upload -->
   <div class="card">
     <h2>1. Upload your file</h2>
-    <p class="sub">Excel (.xlsx, .xls) or CSV. The first sheet will be used.</p>
+    <p class="sub">Excel (.xlsx, .xls) or CSV. Your file is saved in this browser, so you only need to upload it once.</p>
 
     <label for="fileInput" id="dropzone" class="dropzone">
       <div style="font-size: 32px;">📊</div>
@@ -177,20 +181,23 @@
     <div id="resultsArea"></div>
   </div>
 
-  <p class="footer-note">Your file is processed entirely in your browser. Nothing is uploaded to a server.</p>
+  <p class="footer-note">Your file is processed and stored entirely in your browser. Nothing is uploaded to a server.</p>
 </div>
 
 <script>
   const NONE = "__none__";
+  const STORAGE_KEY = "location-lookup:dataset:v1";
+
   let rows = [];
   let columns = [];
   let mapping = { id: "", name: NONE, lat: "", lng: "" };
+  let fileNameStr = "";
 
   const $ = (id) => document.getElementById(id);
   const fileInput = $("fileInput");
   const dropzone = $("dropzone");
   const fileInfo = $("fileInfo");
-  const fileName = $("fileName");
+  const fileNameEl = $("fileName");
   const fileMeta = $("fileMeta");
   const clearBtn = $("clearBtn");
   const errorBox = $("errorBox");
@@ -205,11 +212,7 @@
   const lngColSel = $("lngCol");
 
   function toStr(v) { return v === null || v === undefined ? "" : String(v); }
-
-  function showError(msg) {
-    errorBox.textContent = msg;
-    errorBox.classList.remove("hidden");
-  }
+  function showError(msg) { errorBox.textContent = msg; errorBox.classList.remove("hidden"); }
   function clearError() { errorBox.classList.add("hidden"); errorBox.textContent = ""; }
 
   function autoDetect(cols) {
@@ -231,7 +234,7 @@
   function populateSelects() {
     const opts = (allowNone) =>
       (allowNone ? `<option value="${NONE}">None</option>` : "") +
-      columns.map((c) => `<option value="${c}">${c}</option>`).join("");
+      columns.map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("");
     idColSel.innerHTML = opts(false);
     nameColSel.innerHTML = opts(true);
     latColSel.innerHTML = opts(false);
@@ -242,11 +245,57 @@
     lngColSel.value = mapping.lng;
   }
 
+  function saveDataset() {
+    try {
+      if (rows.length && fileNameStr) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          fileName: fileNameStr, columns, rows,
+          idCol: mapping.id, nameCol: mapping.name,
+          latCol: mapping.lat, lngCol: mapping.lng,
+        }));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (e) { /* storage full or disabled */ }
+  }
+
+  function loadDataset() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.rows) || !Array.isArray(data.columns)) return false;
+      fileNameStr = data.fileName || "";
+      columns = data.columns;
+      rows = data.rows;
+      mapping = {
+        id: data.idCol || "",
+        name: data.nameCol || NONE,
+        lat: data.latCol || "",
+        lng: data.lngCol || "",
+      };
+      showLoadedFile();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function showLoadedFile() {
+    fileNameEl.textContent = fileNameStr;
+    fileMeta.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} · ${columns.length} column${columns.length === 1 ? "" : "s"}`;
+    dropzone.classList.add("hidden");
+    fileInfo.classList.remove("hidden");
+    mapCard.classList.remove("hidden");
+    populateSelects();
+    updateSearchUI();
+    renderResults();
+  }
+
   function onMappingChange() {
     mapping.id = idColSel.value;
     mapping.name = nameColSel.value;
     mapping.lat = latColSel.value;
     mapping.lng = lngColSel.value;
+    saveDataset();
     updateSearchUI();
     renderResults();
   }
@@ -270,7 +319,8 @@
 
   function handleFile(file) {
     clearError();
-    fileName.textContent = file.name;
+    fileNameStr = file.name;
+    fileNameEl.textContent = file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -290,6 +340,7 @@
         fileInfo.classList.remove("hidden");
         mapCard.classList.remove("hidden");
         searchInput.value = "";
+        saveDataset();
         updateSearchUI();
         renderResults();
       } catch (err) {
@@ -305,7 +356,7 @@
   });
 
   clearBtn.addEventListener("click", () => {
-    rows = []; columns = [];
+    rows = []; columns = []; fileNameStr = "";
     mapping = { id: "", name: NONE, lat: "", lng: "" };
     fileInput.value = "";
     dropzone.classList.remove("hidden");
@@ -313,6 +364,7 @@
     mapCard.classList.add("hidden");
     searchCard.classList.add("hidden");
     clearError();
+    saveDataset();
   });
 
   function getResults() {
@@ -343,21 +395,29 @@
     let html = `<table><thead><tr>
       <th>${escapeHtml(mapping.id)}</th>
       ${hasName ? `<th>${escapeHtml(mapping.name)}</th>` : ""}
-      <th>Latitude</th><th>Longitude</th><th style="text-align:right;">Action</th>
+      <th>Latitude</th><th>Longitude</th><th style="text-align:right;">Actions</th>
     </tr></thead><tbody>`;
     shown.forEach((r, i) => {
       const idV = toStr(r[mapping.id]);
       const nameV = hasName ? toStr(r[mapping.name]) : "";
       const lat = toStr(r[mapping.lat]);
       const lng = toStr(r[mapping.lng]);
-      const canCopy = lat && lng;
+      const canUse = lat && lng;
+      const mapsUrl = canUse
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + "," + lng)}`
+        : "#";
       html += `<tr>
         <td><strong>${escapeHtml(idV) || "—"}</strong></td>
         ${hasName ? `<td>${escapeHtml(nameV) || "—"}</td>` : ""}
         <td class="mono">${escapeHtml(lat) || "—"}</td>
         <td class="mono">${escapeHtml(lng) || "—"}</td>
         <td style="text-align:right;">
-          <button data-copy="${i}" data-lat="${escapeHtml(lat)}" data-lng="${escapeHtml(lng)}" ${canCopy ? "" : "disabled"}>📋 Copy</button>
+          <div class="btn-row">
+            <button data-copy="${i}" data-lat="${escapeAttr(lat)}" data-lng="${escapeAttr(lng)}" ${canUse ? "" : "disabled"}>📋 Copy</button>
+            ${canUse
+              ? `<a class="btn primary" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">📍 Open in Maps ↗</a>`
+              : `<button disabled>📍 Open in Maps</button>`}
+          </div>
         </td>
       </tr>`;
     });
@@ -386,8 +446,12 @@
       { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
     ));
   }
+  function escapeAttr(s) { return escapeHtml(s); }
 
   searchInput.addEventListener("input", renderResults);
+
+  // Auto-load saved dataset on page load
+  loadDataset();
 </script>
 </body>
 </html>
