@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Location Lookup</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --primary: #2563eb;
+    --primary-fg: #ffffff;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: var(--radius);
+    background: var(--primary); color: var(--primary-fg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  h1 { margin: 0; font-size: 22px; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 40px; text-align: center; cursor: pointer;
+    background: #f1f5f9; transition: background 0.15s;
+  }
+  .dropzone:hover { background: #e2e8f0; }
+  .dropzone strong { display: block; margin-top: 8px; }
+  .dropzone small { color: var(--muted); }
+
+  .file-info {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #f1f5f9; padding: 12px 16px; border-radius: var(--radius);
+  }
+  .file-info .name { font-weight: 500; }
+  .file-info .meta { color: var(--muted); font-size: 12px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .req { color: var(--danger); }
+
+  select, input[type="text"], input[type="search"] {
+    width: 100%; padding: 8px 12px; font-size: 14px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: #fff; color: var(--text);
+  }
+  select:focus, input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+  button {
+    padding: 6px 12px; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--border); background: #fff; color: var(--text);
+    border-radius: var(--radius);
+  }
+  button:hover:not(:disabled) { background: #f1f5f9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.danger { color: var(--danger); border-color: transparent; }
+
+  .search-box { position: relative; }
+  .search-box input { padding-left: 36px; }
+  .search-box::before {
+    content: "🔍"; position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); font-size: 14px; opacity: 0.5;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+  td.mono { font-family: ui-monospace, Menlo, monospace; }
+  tr:last-child td { border-bottom: none; }
+
+  .empty {
+    text-align: center; padding: 40px 20px; color: var(--muted);
+    font-size: 14px; border: 1px dashed var(--border);
+    border-radius: var(--radius); background: #f8fafc;
+  }
+  .error {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fee2e2; color: var(--danger); border-radius: var(--radius);
+    border: 1px solid #fca5a5;
+  }
+  .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+  .hidden { display: none; }
+  .copied { color: var(--success); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">📍</div>
+    <div>
+      <h1>Location Lookup</h1>
+      <p>Upload your Excel sheet, then search by ID or name to get latitude and longitude.</p>
+    </div>
+  </header>
+
+  <!-- Step 1: Upload -->
+  <div class="card">
+    <h2>1. Upload your file</h2>
+    <p class="sub">Excel (.xlsx, .xls) or CSV. The first sheet will be used.</p>
+
+    <label for="fileInput" id="dropzone" class="dropzone">
+      <div style="font-size: 32px;">📊</div>
+      <strong>Click to select your spreadsheet</strong>
+      <small>.xlsx, .xls, or .csv</small>
+    </label>
+    <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+
+    <div id="fileInfo" class="file-info hidden">
+      <div>
+        <div class="name" id="fileName"></div>
+        <div class="meta" id="fileMeta"></div>
+      </div>
+      <button id="clearBtn" class="danger">✕ Remove</button>
+    </div>
+
+    <div id="errorBox" class="error hidden"></div>
+  </div>
+
+  <!-- Step 2: Map columns -->
+  <div id="mapCard" class="card hidden">
+    <h2>2. Map your columns</h2>
+    <p class="sub">Tell us which column to search and which hold the coordinates.</p>
+    <div class="grid">
+      <div>
+        <label>ID column (used for search) <span class="req">*</span></label>
+        <select id="idCol"></select>
+      </div>
+      <div>
+        <label>Name column (optional, also searchable)</label>
+        <select id="nameCol"></select>
+      </div>
+      <div>
+        <label>Latitude column <span class="req">*</span></label>
+        <select id="latCol"></select>
+      </div>
+      <div>
+        <label>Longitude column <span class="req">*</span></label>
+        <select id="lngCol"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Search -->
+  <div id="searchCard" class="card hidden">
+    <h2>3. Search</h2>
+    <p class="sub" id="searchHint">Type an ID to find the coordinates.</p>
+    <div class="search-box">
+      <input id="searchInput" type="search" placeholder="Search by ID..." />
+    </div>
+    <div id="resultsArea"></div>
+  </div>
+
+  <p class="footer-note">Your file is processed entirely in your browser. Nothing is uploaded to a server.</p>
+</div>
+
+<script>
+  const NONE = "__none__";
+  let rows = [];
+  let columns = [];
+  let mapping = { id: "", name: NONE, lat: "", lng: "" };
+
+  const $ = (id) => document.getElementById(id);
+  const fileInput = $("fileInput");
+  const dropzone = $("dropzone");
+  const fileInfo = $("fileInfo");
+  const fileName = $("fileName");
+  const fileMeta = $("fileMeta");
+  const clearBtn = $("clearBtn");
+  const errorBox = $("errorBox");
+  const mapCard = $("mapCard");
+  const searchCard = $("searchCard");
+  const searchInput = $("searchInput");
+  const searchHint = $("searchHint");
+  const resultsArea = $("resultsArea");
+  const idColSel = $("idCol");
+  const nameColSel = $("nameCol");
+  const latColSel = $("latCol");
+  const lngColSel = $("lngCol");
+
+  function toStr(v) { return v === null || v === undefined ? "" : String(v); }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.remove("hidden");
+  }
+  function clearError() { errorBox.classList.add("hidden"); errorBox.textContent = ""; }
+
+  function autoDetect(cols) {
+    const lower = cols.map((c) => c.toLowerCase());
+    const find = (preds) => {
+      for (const p of preds) {
+        const idx = lower.findIndex(p);
+        if (idx !== -1) return cols[idx];
+      }
+      return "";
+    };
+    mapping.id = find([(s) => s === "id", (s) => s.includes("id")]) || cols[0] || "";
+    mapping.name = find([(s) => s === "name", (s) => s.includes("name")]) || NONE;
+    mapping.lat = find([(s) => s === "lat" || s === "latitude", (s) => s.includes("lat")]) || "";
+    mapping.lng = find([(s) => ["lng","lon","long","longitude"].includes(s),
+                        (s) => s.includes("long") || s.includes("lng") || s.includes("lon")]) || "";
+  }
+
+  function populateSelects() {
+    const opts = (allowNone) =>
+      (allowNone ? `<option value="${NONE}">None</option>` : "") +
+      columns.map((c) => `<option value="${c}">${c}</option>`).join("");
+    idColSel.innerHTML = opts(false);
+    nameColSel.innerHTML = opts(true);
+    latColSel.innerHTML = opts(false);
+    lngColSel.innerHTML = opts(false);
+    idColSel.value = mapping.id;
+    nameColSel.value = mapping.name;
+    latColSel.value = mapping.lat;
+    lngColSel.value = mapping.lng;
+  }
+
+  function onMappingChange() {
+    mapping.id = idColSel.value;
+    mapping.name = nameColSel.value;
+    mapping.lat = latColSel.value;
+    mapping.lng = lngColSel.value;
+    updateSearchUI();
+    renderResults();
+  }
+  [idColSel, nameColSel, latColSel, lngColSel].forEach((s) =>
+    s.addEventListener("change", onMappingChange)
+  );
+
+  function updateSearchUI() {
+    const ready = rows.length && mapping.id && mapping.lat && mapping.lng;
+    if (ready) {
+      searchCard.classList.remove("hidden");
+      const hasName = mapping.name && mapping.name !== NONE;
+      searchHint.textContent = hasName
+        ? "Type an ID or name to find the coordinates."
+        : "Type an ID to find the coordinates.";
+      searchInput.placeholder = hasName ? "Search by ID or name..." : "Search by ID...";
+    } else {
+      searchCard.classList.add("hidden");
+    }
+  }
+
+  function handleFile(file) {
+    clearError();
+    fileName.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheetName = wb.SheetNames[0];
+        if (!sheetName) { showError("The file has no sheets."); return; }
+        const ws = wb.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        if (!json.length) { showError("The first sheet is empty."); return; }
+        rows = json;
+        columns = Object.keys(json[0]);
+        autoDetect(columns);
+        populateSelects();
+        fileMeta.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} · ${columns.length} column${columns.length === 1 ? "" : "s"}`;
+        dropzone.classList.add("hidden");
+        fileInfo.classList.remove("hidden");
+        mapCard.classList.remove("hidden");
+        searchInput.value = "";
+        updateSearchUI();
+        renderResults();
+      } catch (err) {
+        showError("Could not read the file. Make sure it is a valid Excel or CSV.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  fileInput.addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (f) handleFile(f);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    rows = []; columns = [];
+    mapping = { id: "", name: NONE, lat: "", lng: "" };
+    fileInput.value = "";
+    dropzone.classList.remove("hidden");
+    fileInfo.classList.add("hidden");
+    mapCard.classList.add("hidden");
+    searchCard.classList.add("hidden");
+    clearError();
+  });
+
+  function getResults() {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) return [];
+    const hasName = mapping.name && mapping.name !== NONE;
+    return rows.filter((r) => {
+      const idVal = toStr(r[mapping.id]).toLowerCase();
+      const nameVal = hasName ? toStr(r[mapping.name]).toLowerCase() : "";
+      return idVal.includes(q) || (hasName && nameVal.includes(q));
+    });
+  }
+
+  function renderResults() {
+    if (searchCard.classList.contains("hidden")) return;
+    const q = searchInput.value.trim();
+    if (!q) {
+      resultsArea.innerHTML = `<div class="empty" style="margin-top:16px;">Start typing above to see matching locations.</div>`;
+      return;
+    }
+    const results = getResults();
+    if (!results.length) {
+      resultsArea.innerHTML = `<div class="empty" style="margin-top:16px;">No matches for "${escapeHtml(q)}".</div>`;
+      return;
+    }
+    const hasName = mapping.name && mapping.name !== NONE;
+    const shown = results.slice(0, 100);
+    let html = `<table><thead><tr>
+      <th>${escapeHtml(mapping.id)}</th>
+      ${hasName ? `<th>${escapeHtml(mapping.name)}</th>` : ""}
+      <th>Latitude</th><th>Longitude</th><th style="text-align:right;">Action</th>
+    </tr></thead><tbody>`;
+    shown.forEach((r, i) => {
+      const idV = toStr(r[mapping.id]);
+      const nameV = hasName ? toStr(r[mapping.name]) : "";
+      const lat = toStr(r[mapping.lat]);
+      const lng = toStr(r[mapping.lng]);
+      const canCopy = lat && lng;
+      html += `<tr>
+        <td><strong>${escapeHtml(idV) || "—"}</strong></td>
+        ${hasName ? `<td>${escapeHtml(nameV) || "—"}</td>` : ""}
+        <td class="mono">${escapeHtml(lat) || "—"}</td>
+        <td class="mono">${escapeHtml(lng) || "—"}</td>
+        <td style="text-align:right;">
+          <button data-copy="${i}" data-lat="${escapeHtml(lat)}" data-lng="${escapeHtml(lng)}" ${canCopy ? "" : "disabled"}>📋 Copy</button>
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    if (results.length > 100) {
+      html += `<div style="padding:8px 12px; font-size:12px; color: var(--muted); background:#f8fafc; border:1px solid var(--border); border-top:none; border-radius: 0 0 var(--radius) var(--radius);">Showing first 100 of ${results.length} matches. Refine your search to narrow down.</div>`;
+    }
+    resultsArea.innerHTML = html;
+
+    resultsArea.querySelectorAll("button[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const lat = btn.getAttribute("data-lat");
+        const lng = btn.getAttribute("data-lng");
+        navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
+          const orig = btn.innerHTML;
+          btn.innerHTML = "✓ Copied";
+          btn.classList.add("copied");
+          setTimeout(() => { btn.innerHTML = orig; btn.classList.remove("copied"); }, 1500);
+        });
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
+    ));
+  }
+
+  searchInput.addEventListener("input", renderResults);
+</script>
+</body>
+</html>
