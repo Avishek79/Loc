@@ -3,186 +3,446 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Location Lookup</title>
+<title>GeoLookup — Spreadsheet Location Finder</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #f8fafc;
+    --bg-soft: #ffffff;
     --card: #ffffff;
     --text: #0f172a;
     --muted: #64748b;
+    --muted-soft: #94a3b8;
     --border: #e2e8f0;
+    --border-soft: #eef2f6;
     --primary: #2563eb;
+    --primary-soft: #eff6ff;
     --primary-fg: #ffffff;
+    --primary-hover: #1d4ed8;
     --danger: #dc2626;
+    --danger-soft: #fee2e2;
     --success: #16a34a;
-    --radius: 8px;
+    --success-soft: #ecfdf5;
+    --success-border: #bbf7d0;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,0.04);
+    --shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
   }
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", sans-serif;
+    background: linear-gradient(to bottom, #f8fafc, #ffffff);
     color: var(--text);
     line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
-  .container { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-  .logo {
-    width: 40px; height: 40px; border-radius: var(--radius);
+
+  /* Top nav */
+  nav.topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
     background: var(--primary); color: var(--primary-fg);
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
+    font-size: 16px; box-shadow: var(--shadow-sm);
   }
-  h1 { margin: 0; font-size: 22px; }
-  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-name { font-size: 14px; font-weight: 600; }
+  .brand-sub { font-size: 11px; color: var(--muted); }
+  .nav-trust {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+  }
+  .nav-trust .dot { color: var(--success); }
+  @media (max-width: 600px) { .nav-trust { display: none; } }
 
+  /* Layout */
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 16px 24px; }
+
+  /* Hero */
+  .hero { max-width: 760px; margin-bottom: 32px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); background: #fff;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; color: var(--muted);
+    box-shadow: var(--shadow-sm); margin-bottom: 12px;
+  }
+  .eyebrow .pulse {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+  }
+  h1 {
+    font-size: clamp(26px, 4vw, 36px);
+    font-weight: 600; letter-spacing: -0.02em;
+    margin: 0; color: var(--text);
+  }
+  h1 .accent { color: var(--primary); }
+  .hero p {
+    margin: 12px 0 0; font-size: 15px; color: var(--muted); max-width: 640px;
+  }
+
+  /* Steps */
+  .steps {
+    display: flex; align-items: center; gap: 8px;
+    margin: 24px 0 28px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .step {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: #fff;
+    font-size: 12px; font-weight: 500; color: var(--muted);
+    white-space: nowrap;
+  }
+  .step .num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #f1f5f9; color: var(--muted);
+    font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .step.active { border-color: rgba(37,99,235,0.3); background: var(--primary-soft); color: var(--primary); }
+  .step.active .num { background: var(--primary); color: #fff; }
+  .step.done { border-color: var(--success-border); background: var(--success-soft); color: var(--success); }
+  .step.done .num { background: var(--success); color: #fff; }
+  .step-sep { color: var(--muted-soft); font-size: 12px; }
+
+  /* Card */
   .card {
     background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    border-radius: var(--radius); margin-bottom: 20px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
   }
-  .card h2 { margin: 0 0 4px; font-size: 16px; }
-  .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .card-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border-soft);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-icon {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
+    background: var(--primary-soft); color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .card-title { font-size: 15px; font-weight: 600; margin: 0; }
+  .card-sub { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+  .card-body { padding: 20px; }
 
+  /* Dropzone */
   .dropzone {
     border: 2px dashed var(--border); border-radius: var(--radius);
-    padding: 40px; text-align: center; cursor: pointer;
-    background: #f1f5f9; transition: background 0.15s;
+    padding: 48px 20px; text-align: center; cursor: pointer;
+    background: #f8fafc; transition: all 0.15s;
   }
-  .dropzone:hover { background: #e2e8f0; }
-  .dropzone strong { display: block; margin-top: 8px; }
-  .dropzone small { color: var(--muted); }
+  .dropzone:hover { border-color: rgba(37,99,235,0.4); background: var(--primary-soft); }
+  .dropzone-icon {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--primary-soft); color: var(--primary);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 12px;
+    transition: transform 0.15s;
+  }
+  .dropzone:hover .dropzone-icon { transform: scale(1.05); }
+  .dropzone-title { font-size: 14px; font-weight: 600; }
+  .dropzone-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
+  /* File info */
   .file-info {
-    display: flex; justify-content: space-between; align-items: center;
-    background: #f1f5f9; padding: 12px 16px; border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border: 1px solid var(--border);
+    background: #f8fafc; border-radius: var(--radius);
   }
-  .file-info .name { font-weight: 500; }
-  .file-info .meta { color: var(--muted); font-size: 12px; }
+  .file-info-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .file-icon-box {
+    width: 40px; height: 40px; border-radius: var(--radius-sm);
+    background: var(--primary-soft); color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .file-info-text { min-width: 0; }
+  .file-name {
+    font-size: 14px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-meta { font-size: 12px; color: var(--muted); }
+  .file-actions { display: flex; gap: 6px; }
 
+  /* Form */
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
-
-  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-  .req { color: var(--danger); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; font-weight: 500; color: var(--text); }
+  .field label .req { color: var(--danger); }
+  .field label .opt { color: var(--muted); font-weight: 400; }
 
   select, input[type="text"], input[type="search"] {
-    width: 100%; padding: 8px 12px; font-size: 14px;
-    border: 1px solid var(--border); border-radius: var(--radius);
+    width: 100%; padding: 9px 12px; font-size: 14px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
     background: #fff; color: var(--text);
+    font-family: inherit;
   }
-  select:focus, input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+  select:focus, input:focus {
+    outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+  }
 
+  /* Buttons */
   button, a.btn {
-    padding: 6px 12px; font-size: 13px; cursor: pointer;
+    padding: 8px 14px; font-size: 13px; cursor: pointer;
     border: 1px solid var(--border); background: #fff; color: var(--text);
-    border-radius: var(--radius); display: inline-flex; align-items: center;
-    gap: 4px; text-decoration: none;
+    border-radius: var(--radius-sm); display: inline-flex; align-items: center;
+    gap: 6px; text-decoration: none; font-family: inherit; font-weight: 500;
+    transition: all 0.12s; line-height: 1;
   }
   button:hover:not(:disabled), a.btn:hover { background: #f1f5f9; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.danger { color: var(--danger); border-color: transparent; background: transparent; }
-  a.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-  a.btn.primary:hover { background: #1d4ed8; }
+  button:disabled, a.btn.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+  button.ghost, a.btn.ghost { border-color: transparent; background: transparent; }
+  button.ghost:hover { background: #f1f5f9; }
+  button.primary, a.btn.primary {
+    background: var(--primary); color: #fff; border-color: var(--primary);
+  }
+  button.primary:hover:not(:disabled), a.btn.primary:hover {
+    background: var(--primary-hover); border-color: var(--primary-hover);
+  }
+  button.outline { background: #fff; }
   .btn-row { display: inline-flex; gap: 6px; justify-content: flex-end; }
 
-  .search-box { position: relative; }
-  .search-box input { padding-left: 36px; }
-  .search-box::before {
+  /* Search input */
+  .search-wrap { position: relative; }
+  .search-wrap input { padding-left: 38px; height: 44px; font-size: 14px; }
+  .search-wrap::before {
     content: "🔍"; position: absolute; left: 12px; top: 50%;
-    transform: translateY(-50%); font-size: 14px; opacity: 0.5;
+    transform: translateY(-50%); font-size: 13px; opacity: 0.5;
+    pointer-events: none;
   }
 
-  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
-  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--muted); }
-  td.mono { font-family: ui-monospace, Menlo, monospace; }
-  tr:last-child td { border-bottom: none; }
+  /* Direct lookup panel */
+  .direct-panel {
+    margin-top: 16px; padding: 16px;
+    border: 1px solid var(--border); background: #f8fafc;
+    border-radius: var(--radius);
+  }
+  .direct-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px; font-size: 14px; font-weight: 600;
+  }
+  .direct-head .icon { color: var(--primary); }
+  .direct-sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .direct-row { display: flex; flex-direction: column; gap: 8px; }
+  @media (min-width: 600px) { .direct-row { flex-direction: row; } }
+  .direct-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; }
+  .direct-inputs input { font-family: ui-monospace, Menlo, monospace; }
+  .direct-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
 
+  /* Results */
+  .results-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; font-weight: 500; }
+  .table-wrap { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #f8fafc; }
+  th {
+    padding: 10px 14px; text-align: left;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  th.right { text-align: right; }
+  td {
+    padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+    font-size: 14px; vertical-align: middle;
+  }
+  td.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
+  td.right { text-align: right; }
+  td.bold { font-weight: 500; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafbfc; }
+  .table-footer {
+    border-top: 1px solid var(--border-soft); background: #f8fafc;
+    padding: 8px 14px; font-size: 12px; color: var(--muted);
+  }
+
+  /* Empty / error */
   .empty {
-    text-align: center; padding: 40px 20px; color: var(--muted);
-    font-size: 14px; border: 1px dashed var(--border);
-    border-radius: var(--radius); background: #f8fafc;
+    text-align: center; padding: 40px 20px;
+    border: 1px dashed var(--border); border-radius: var(--radius);
+    background: #fafbfc;
   }
+  .empty-icon { font-size: 24px; opacity: 0.5; margin-bottom: 8px; }
+  .empty-title { font-size: 14px; font-weight: 500; }
+  .empty-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .error {
-    margin-top: 12px; padding: 10px 14px; font-size: 14px;
-    background: #fee2e2; color: var(--danger); border-radius: var(--radius);
-    border: 1px solid #fca5a5;
+    margin-top: 12px; padding: 10px 14px; font-size: 13px;
+    background: var(--danger-soft); color: var(--danger);
+    border: 1px solid #fca5a5; border-radius: var(--radius-sm);
   }
-  .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
-  .hidden { display: none; }
-  .copied { color: var(--success); }
+
+  /* Footer */
+  footer {
+    max-width: 1100px; margin: 48px auto 0; padding: 24px 16px;
+    border-top: 1px solid var(--border-soft);
+    text-align: center; font-size: 12px; color: var(--muted);
+  }
+  footer .trust {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
+  footer .trust .check { color: var(--success); }
+
+  .copied { color: var(--success) !important; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <div class="logo">📍</div>
-    <div>
-      <h1>Location Lookup</h1>
-      <p>Upload your Excel sheet, then search by ID or name to get latitude and longitude.</p>
+
+<nav class="topbar">
+  <div class="nav-inner">
+    <div class="brand">
+      <div class="brand-logo">🧭</div>
+      <div class="brand-text">
+        <span class="brand-name">GeoLookup</span>
+        <span class="brand-sub">Spreadsheet location finder</span>
+      </div>
     </div>
-  </header>
+    <div class="nav-trust">
+      <span class="dot">✓</span>
+      100% local — your data never leaves the browser
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="eyebrow"><span class="pulse"></span> Excel · CSV · Instant search</span>
+    <h1>Find any location's coordinates, <span class="accent">in seconds.</span></h1>
+    <p>Upload your spreadsheet of IDs and addresses once. Search by ID or name to retrieve latitude and longitude — and open results instantly in Google Maps.</p>
+  </section>
+
+  <!-- Steps -->
+  <div class="steps" id="steps">
+    <div class="step active" data-step="1"><span class="num">1</span> Upload</div>
+    <span class="step-sep">›</span>
+    <div class="step" data-step="2"><span class="num">2</span> Map columns</div>
+    <span class="step-sep">›</span>
+    <div class="step" data-step="3"><span class="num">3</span> Search</div>
+  </div>
 
   <!-- Step 1: Upload -->
   <div class="card">
-    <h2>1. Upload your file</h2>
-    <p class="sub">Excel (.xlsx, .xls) or CSV. Your file is saved in this browser, so you only need to upload it once.</p>
-
-    <label for="fileInput" id="dropzone" class="dropzone">
-      <div style="font-size: 32px;">📊</div>
-      <strong>Click to select your spreadsheet</strong>
-      <small>.xlsx, .xls, or .csv</small>
-    </label>
-    <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
-
-    <div id="fileInfo" class="file-info hidden">
+    <div class="card-head">
+      <div class="card-icon">⬆</div>
       <div>
-        <div class="name" id="fileName"></div>
-        <div class="meta" id="fileMeta"></div>
+        <h2 class="card-title">Dataset</h2>
+        <p class="card-sub">Excel (.xlsx, .xls) or CSV. Saved in this browser — upload once, search forever.</p>
       </div>
-      <button id="clearBtn" class="danger">✕ Remove</button>
     </div>
+    <div class="card-body">
+      <label for="fileInput" id="dropzone" class="dropzone">
+        <div class="dropzone-icon">📊</div>
+        <div class="dropzone-title">Click to select your spreadsheet</div>
+        <div class="dropzone-sub">Supports .xlsx, .xls, and .csv files</div>
+      </label>
+      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
 
-    <div id="errorBox" class="error hidden"></div>
+      <div id="fileInfo" class="file-info hidden">
+        <div class="file-info-left">
+          <div class="file-icon-box">📄</div>
+          <div class="file-info-text">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-meta" id="fileMeta"></div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <button id="replaceBtn" class="outline">⬆ Replace</button>
+          <button id="clearBtn" class="ghost">✕</button>
+        </div>
+      </div>
+
+      <div id="errorBox" class="error hidden"></div>
+    </div>
   </div>
 
   <!-- Step 2: Map columns -->
   <div id="mapCard" class="card hidden">
-    <h2>2. Map your columns</h2>
-    <p class="sub">Tell us which column to search and which hold the coordinates.</p>
-    <div class="grid">
+    <div class="card-head">
+      <div class="card-icon">⚙</div>
       <div>
-        <label>ID column (used for search) <span class="req">*</span></label>
-        <select id="idCol"></select>
+        <h2 class="card-title">Column mapping</h2>
+        <p class="card-sub">Tell us which column to search in and which columns hold the coordinates.</p>
       </div>
-      <div>
-        <label>Name column (optional, also searchable)</label>
-        <select id="nameCol"></select>
-      </div>
-      <div>
-        <label>Latitude column <span class="req">*</span></label>
-        <select id="latCol"></select>
-      </div>
-      <div>
-        <label>Longitude column <span class="req">*</span></label>
-        <select id="lngCol"></select>
+    </div>
+    <div class="card-body">
+      <div class="grid">
+        <div class="field">
+          <label>ID column (used for search) <span class="req">*</span></label>
+          <select id="idCol"></select>
+        </div>
+        <div class="field">
+          <label>Name column <span class="opt">(optional, also searchable)</span></label>
+          <select id="nameCol"></select>
+        </div>
+        <div class="field">
+          <label>Latitude column <span class="req">*</span></label>
+          <select id="latCol"></select>
+        </div>
+        <div class="field">
+          <label>Longitude column <span class="req">*</span></label>
+          <select id="lngCol"></select>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Step 3: Search -->
   <div id="searchCard" class="card hidden">
-    <h2>3. Search</h2>
-    <p class="sub" id="searchHint">Type an ID to find the coordinates.</p>
-    <div class="search-box">
-      <input id="searchInput" type="search" placeholder="Search by ID..." />
+    <div class="card-head">
+      <div class="card-icon">🔍</div>
+      <div>
+        <h2 class="card-title">Search</h2>
+        <p class="card-sub" id="searchHint">Type an ID to find the coordinates.</p>
+      </div>
     </div>
-    <div id="resultsArea"></div>
+    <div class="card-body">
+      <div class="search-wrap">
+        <input id="searchInput" type="search" placeholder="Search by ID..." />
+      </div>
+
+      <!-- Direct coordinate lookup -->
+      <div class="direct-panel">
+        <div class="direct-head">
+          <span class="icon">📍</span>
+          Or open coordinates directly in Google Maps
+        </div>
+        <p class="direct-sub">Already have a latitude and longitude? Paste them here to jump straight to the location.</p>
+        <div class="direct-row">
+          <div class="direct-inputs">
+            <input id="directLat" type="text" inputmode="decimal" placeholder="Latitude (e.g. 28.6139)" />
+            <input id="directLng" type="text" inputmode="decimal" placeholder="Longitude (e.g. 77.2090)" />
+          </div>
+          <button id="directBtn" class="primary">📍 Open in Maps ↗</button>
+        </div>
+        <div id="directError" class="direct-error hidden"></div>
+      </div>
+
+      <div id="resultsArea" style="margin-top: 20px;"></div>
+    </div>
   </div>
 
-  <p class="footer-note">Your file is processed and stored entirely in your browser. Nothing is uploaded to a server.</p>
 </div>
+
+<footer>
+  <div class="trust"><span class="check">✓</span> All processing happens in your browser. Your data never leaves your device.</div>
+  <div>GeoLookup · Built for fast, private spreadsheet location lookups</div>
+</footer>
 
 <script>
   const NONE = "__none__";
@@ -200,6 +460,7 @@
   const fileNameEl = $("fileName");
   const fileMeta = $("fileMeta");
   const clearBtn = $("clearBtn");
+  const replaceBtn = $("replaceBtn");
   const errorBox = $("errorBox");
   const mapCard = $("mapCard");
   const searchCard = $("searchCard");
@@ -210,10 +471,40 @@
   const nameColSel = $("nameCol");
   const latColSel = $("latCol");
   const lngColSel = $("lngCol");
+  const directLat = $("directLat");
+  const directLng = $("directLng");
+  const directBtn = $("directBtn");
+  const directError = $("directError");
 
   function toStr(v) { return v === null || v === undefined ? "" : String(v); }
   function showError(msg) { errorBox.textContent = msg; errorBox.classList.remove("hidden"); }
   function clearError() { errorBox.classList.add("hidden"); errorBox.textContent = ""; }
+  function buildMapsUrl(lat, lng) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + "," + lng)}`;
+  }
+
+  function updateSteps() {
+    const uploadDone = rows.length > 0;
+    const mapDone = uploadDone && mapping.id && mapping.lat && mapping.lng;
+    document.querySelectorAll(".step").forEach((el) => {
+      const n = el.getAttribute("data-step");
+      el.classList.remove("active", "done");
+      if (n === "1") {
+        if (uploadDone) el.classList.add("done");
+        else el.classList.add("active");
+      } else if (n === "2") {
+        if (mapDone) el.classList.add("done");
+        else if (uploadDone) el.classList.add("active");
+      } else if (n === "3") {
+        if (mapDone) el.classList.add("active");
+      }
+    });
+    document.querySelectorAll(".step .num").forEach((el) => {
+      const parent = el.parentElement;
+      if (parent.classList.contains("done")) el.textContent = "✓";
+      else el.textContent = parent.getAttribute("data-step");
+    });
+  }
 
   function autoDetect(cols) {
     const lower = cols.map((c) => c.toLowerCase());
@@ -236,222 +527,4 @@
       (allowNone ? `<option value="${NONE}">None</option>` : "") +
       columns.map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("");
     idColSel.innerHTML = opts(false);
-    nameColSel.innerHTML = opts(true);
-    latColSel.innerHTML = opts(false);
-    lngColSel.innerHTML = opts(false);
-    idColSel.value = mapping.id;
-    nameColSel.value = mapping.name;
-    latColSel.value = mapping.lat;
-    lngColSel.value = mapping.lng;
-  }
-
-  function saveDataset() {
-    try {
-      if (rows.length && fileNameStr) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          fileName: fileNameStr, columns, rows,
-          idCol: mapping.id, nameCol: mapping.name,
-          latCol: mapping.lat, lngCol: mapping.lng,
-        }));
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch (e) { /* storage full or disabled */ }
-  }
-
-  function loadDataset() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return false;
-      const data = JSON.parse(raw);
-      if (!data || !Array.isArray(data.rows) || !Array.isArray(data.columns)) return false;
-      fileNameStr = data.fileName || "";
-      columns = data.columns;
-      rows = data.rows;
-      mapping = {
-        id: data.idCol || "",
-        name: data.nameCol || NONE,
-        lat: data.latCol || "",
-        lng: data.lngCol || "",
-      };
-      showLoadedFile();
-      return true;
-    } catch (e) { return false; }
-  }
-
-  function showLoadedFile() {
-    fileNameEl.textContent = fileNameStr;
-    fileMeta.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} · ${columns.length} column${columns.length === 1 ? "" : "s"}`;
-    dropzone.classList.add("hidden");
-    fileInfo.classList.remove("hidden");
-    mapCard.classList.remove("hidden");
-    populateSelects();
-    updateSearchUI();
-    renderResults();
-  }
-
-  function onMappingChange() {
-    mapping.id = idColSel.value;
-    mapping.name = nameColSel.value;
-    mapping.lat = latColSel.value;
-    mapping.lng = lngColSel.value;
-    saveDataset();
-    updateSearchUI();
-    renderResults();
-  }
-  [idColSel, nameColSel, latColSel, lngColSel].forEach((s) =>
-    s.addEventListener("change", onMappingChange)
-  );
-
-  function updateSearchUI() {
-    const ready = rows.length && mapping.id && mapping.lat && mapping.lng;
-    if (ready) {
-      searchCard.classList.remove("hidden");
-      const hasName = mapping.name && mapping.name !== NONE;
-      searchHint.textContent = hasName
-        ? "Type an ID or name to find the coordinates."
-        : "Type an ID to find the coordinates.";
-      searchInput.placeholder = hasName ? "Search by ID or name..." : "Search by ID...";
-    } else {
-      searchCard.classList.add("hidden");
-    }
-  }
-
-  function handleFile(file) {
-    clearError();
-    fileNameStr = file.name;
-    fileNameEl.textContent = file.name;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, { type: "array" });
-        const sheetName = wb.SheetNames[0];
-        if (!sheetName) { showError("The file has no sheets."); return; }
-        const ws = wb.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        if (!json.length) { showError("The first sheet is empty."); return; }
-        rows = json;
-        columns = Object.keys(json[0]);
-        autoDetect(columns);
-        populateSelects();
-        fileMeta.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} · ${columns.length} column${columns.length === 1 ? "" : "s"}`;
-        dropzone.classList.add("hidden");
-        fileInfo.classList.remove("hidden");
-        mapCard.classList.remove("hidden");
-        searchInput.value = "";
-        saveDataset();
-        updateSearchUI();
-        renderResults();
-      } catch (err) {
-        showError("Could not read the file. Make sure it is a valid Excel or CSV.");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  fileInput.addEventListener("change", (e) => {
-    const f = e.target.files[0];
-    if (f) handleFile(f);
-  });
-
-  clearBtn.addEventListener("click", () => {
-    rows = []; columns = []; fileNameStr = "";
-    mapping = { id: "", name: NONE, lat: "", lng: "" };
-    fileInput.value = "";
-    dropzone.classList.remove("hidden");
-    fileInfo.classList.add("hidden");
-    mapCard.classList.add("hidden");
-    searchCard.classList.add("hidden");
-    clearError();
-    saveDataset();
-  });
-
-  function getResults() {
-    const q = searchInput.value.trim().toLowerCase();
-    if (!q) return [];
-    const hasName = mapping.name && mapping.name !== NONE;
-    return rows.filter((r) => {
-      const idVal = toStr(r[mapping.id]).toLowerCase();
-      const nameVal = hasName ? toStr(r[mapping.name]).toLowerCase() : "";
-      return idVal.includes(q) || (hasName && nameVal.includes(q));
-    });
-  }
-
-  function renderResults() {
-    if (searchCard.classList.contains("hidden")) return;
-    const q = searchInput.value.trim();
-    if (!q) {
-      resultsArea.innerHTML = `<div class="empty" style="margin-top:16px;">Start typing above to see matching locations.</div>`;
-      return;
-    }
-    const results = getResults();
-    if (!results.length) {
-      resultsArea.innerHTML = `<div class="empty" style="margin-top:16px;">No matches for "${escapeHtml(q)}".</div>`;
-      return;
-    }
-    const hasName = mapping.name && mapping.name !== NONE;
-    const shown = results.slice(0, 100);
-    let html = `<table><thead><tr>
-      <th>${escapeHtml(mapping.id)}</th>
-      ${hasName ? `<th>${escapeHtml(mapping.name)}</th>` : ""}
-      <th>Latitude</th><th>Longitude</th><th style="text-align:right;">Actions</th>
-    </tr></thead><tbody>`;
-    shown.forEach((r, i) => {
-      const idV = toStr(r[mapping.id]);
-      const nameV = hasName ? toStr(r[mapping.name]) : "";
-      const lat = toStr(r[mapping.lat]);
-      const lng = toStr(r[mapping.lng]);
-      const canUse = lat && lng;
-      const mapsUrl = canUse
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + "," + lng)}`
-        : "#";
-      html += `<tr>
-        <td><strong>${escapeHtml(idV) || "—"}</strong></td>
-        ${hasName ? `<td>${escapeHtml(nameV) || "—"}</td>` : ""}
-        <td class="mono">${escapeHtml(lat) || "—"}</td>
-        <td class="mono">${escapeHtml(lng) || "—"}</td>
-        <td style="text-align:right;">
-          <div class="btn-row">
-            <button data-copy="${i}" data-lat="${escapeAttr(lat)}" data-lng="${escapeAttr(lng)}" ${canUse ? "" : "disabled"}>📋 Copy</button>
-            ${canUse
-              ? `<a class="btn primary" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">📍 Open in Maps ↗</a>`
-              : `<button disabled>📍 Open in Maps</button>`}
-          </div>
-        </td>
-      </tr>`;
-    });
-    html += `</tbody></table>`;
-    if (results.length > 100) {
-      html += `<div style="padding:8px 12px; font-size:12px; color: var(--muted); background:#f8fafc; border:1px solid var(--border); border-top:none; border-radius: 0 0 var(--radius) var(--radius);">Showing first 100 of ${results.length} matches. Refine your search to narrow down.</div>`;
-    }
-    resultsArea.innerHTML = html;
-
-    resultsArea.querySelectorAll("button[data-copy]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const lat = btn.getAttribute("data-lat");
-        const lng = btn.getAttribute("data-lng");
-        navigator.clipboard.writeText(`${lat}, ${lng}`).then(() => {
-          const orig = btn.innerHTML;
-          btn.innerHTML = "✓ Copied";
-          btn.classList.add("copied");
-          setTimeout(() => { btn.innerHTML = orig; btn.classList.remove("copied"); }, 1500);
-        });
-      });
-    });
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => (
-      { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]
-    ));
-  }
-  function escapeAttr(s) { return escapeHtml(s); }
-
-  searchInput.addEventListener("input", renderResults);
-
-  // Auto-load saved dataset on page load
-  loadDataset();
-</script>
-</body>
-</html>
+    nameColSel.innerHTML = opts(true)
